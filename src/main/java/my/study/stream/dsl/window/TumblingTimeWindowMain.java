@@ -1,4 +1,4 @@
-package my.study.stream.window;
+package my.study.stream.dsl.window;
 
 import static my.study.common.PropertiesProvider.getStreamProperties;
 
@@ -18,20 +18,15 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.kstream.Suppressed.BufferConfig;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.WindowStore;
 
 @Slf4j
-public class SessionWindowMain {
+public class TumblingTimeWindowMain {
 
   public static void main(String[] args) {
-    Properties config = getStreamProperties("session-window-app", "session-window-config");
+    Properties config = getStreamProperties("tumbling-window-app", "tumbling-window-config");
     Topology topology = initTopology();
     KafkaStreams streams = new KafkaStreams(topology, config);
     log.info("Topology:{}", topology.describe());
@@ -54,19 +49,15 @@ public class SessionWindowMain {
     KTable<Windowed<String>, Long> output = clickTopic
         .processValues(new LoggingProcessorSupplier<>())
         .groupByKey(Grouped.as("click-group"))
-        .windowedBy(SessionWindows.ofInactivityGapAndGrace(Duration.ofMillis(300), Duration.ofMillis(1000)))
-        .count(Named.as("clicks-count"),
-            Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(
-                "clicks-count-store").withStoreType(StoreType.IN_MEMORY).withKeySerde(Serdes.String())
-        )
-        .suppress(Suppressed.untilWindowCloses(BufferConfig.unbounded()).withName("click-suppress"));
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofMillis(600), Duration.ofMillis(350)))
+        .count(Named.as("clicks-count")
+            ,Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(
+                "clicks-count-store").withStoreType(StoreType.IN_MEMORY)
+        );
 
-
-    output
-        .toStream()
-        .foreach(
-            (k, v) -> log.info("Key:[{}], window:[start-{}/end-{}], value:[{}]", k.key(), k.window().startTime(),
-                k.window().endTime(), v));
+    output.toStream().foreach(
+        (k, v) -> log.info("Key:[{}], window:[start-{}/end-{}], value:[{}], window-interval:[{}]", k.key(), k.window().startTime(),
+            k.window().endTime(), v, k.window()));
 
     return builder.build();
   }

@@ -1,4 +1,4 @@
-package my.study.stream.window;
+package my.study.stream.dsl.window;
 
 import static my.study.common.PropertiesProvider.getStreamProperties;
 

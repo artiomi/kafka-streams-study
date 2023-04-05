@@ -1,4 +1,4 @@
-package my.study.stream;
+package my.study.stream.dsl;
 
 import static my.study.common.PropertiesProvider.getStreamProperties;
 

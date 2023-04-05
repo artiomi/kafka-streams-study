@@ -1,4 +1,4 @@
-package my.study;
+package my.study.stream.dsl;
 
 import static my.study.common.PropertiesProvider.getProducerProperties;
 
