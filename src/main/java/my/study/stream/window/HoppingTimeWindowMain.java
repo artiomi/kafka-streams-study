@@ -17,8 +17,6 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.kstream.Suppressed.BufferConfig;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.Stores;
@@ -46,10 +44,11 @@ public class HoppingTimeWindowMain {
   private static Topology initTopology() {
     StreamsBuilder builder = new StreamsBuilder();
 
-    var clickTopic = builder.stream("click-topic", Consumed.with(Serdes.String(), Serdes.String()));
+    var clickTopic = builder.stream("click-topic",
+        Consumed.with(Serdes.String(), Serdes.String()).withName("clicks-consumer"));
 
     KTable<Windowed<String>, Long> output = clickTopic
-        .processValues(new LoggingProcessorSupplier<>())
+        .processValues(new LoggingProcessorSupplier<>(), Named.as("logging-processor"))
         .groupByKey(Grouped.as("click-group"))
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofMillis(300), Duration.ofMillis(1000))
             .advanceBy(Duration.ofMillis(200)))
@@ -63,12 +62,12 @@ public class HoppingTimeWindowMain {
 //InMemory DB
 //            Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(
 //                "clicks-count-store").withStoreType(StoreType.IN_MEMORY)
-        )
-        .suppress(Suppressed.untilWindowCloses(BufferConfig.unbounded()));
+        );
 
-    output.toStream().foreach(
-        (k, v) -> log.info("Key:[{}], window:[start-{}/end-{}], value:[{}]", k.key(), k.window().startTime(),
-            k.window().endTime(), v));
+    output.toStream(Named.as("grouped-clicks-out-stream"))
+        .foreach((k, v) -> log.info("Key:[{}], window:[start-{}/end-{}], value:[{}]", k.key(), k.window().startTime(),
+                k.window().endTime(), v),
+            Named.as("grouped-clicks-out"));
 
     return builder.build();
   }
