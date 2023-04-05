@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>my.study</groupId>
-  <artifactId>confluent-streams</artifactId>
+  <artifactId>kafka-streams-study</artifactId>
   <version>1.0-SNAPSHOT</version>
 
   <properties>
