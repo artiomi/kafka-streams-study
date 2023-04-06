@@ -22,10 +22,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 
 @Slf4j
 public class SessionWindowMain {
@@ -58,15 +55,25 @@ public class SessionWindowMain {
         .count(Named.as("clicks-count"),
             Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(
                 "clicks-count-store").withStoreType(StoreType.IN_MEMORY).withKeySerde(Serdes.String())
-        )
-        .suppress(Suppressed.untilWindowCloses(BufferConfig.unbounded()).withName("click-suppress"));
-
+        );
+    output
+        .toStream(Named.as("instant-results-stream"))
+        .foreach(
+            (k, v) -> log.info("Intermediate response. Key:[{}], window:[start-{}/end-{}], value:[{}]", k.key(),
+                k.window().startTime(),
+                k.window().endTime(), v)
+            , Named.as("instant-results-publisher")
+        );
 
     output
-        .toStream()
+        .suppress(Suppressed.untilWindowCloses(BufferConfig.unbounded()).withName("click-suppress"))
+        .toStream(Named.as("final-results-stream"))
         .foreach(
-            (k, v) -> log.info("Key:[{}], window:[start-{}/end-{}], value:[{}]", k.key(), k.window().startTime(),
-                k.window().endTime(), v));
+            (k, v) -> log.info("Final response. Key:[{}], window:[start-{}/end-{}], value:[{}]", k.key(),
+                k.window().startTime(),
+                k.window().endTime(), v)
+            , Named.as("final-results-publisher")
+        );
 
     return builder.build();
   }
