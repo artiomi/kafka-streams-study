@@ -35,16 +35,20 @@ public class EventsProducerForWindows {
     try (Producer<String, String> producer = new KafkaProducer<>(properties)) {
 
       TimeUnit.MILLISECONDS.sleep(0);
-      producer.send(newStringEvent("book", NOW.toEpochMilli() + 5));
-      producer.send(newStringEvent("movie", NOW.toEpochMilli() + 6));
+      producer.send(newStringEvent("book", null));
+      producer.send(newStringEvent("movie", null));
       TimeUnit.MILLISECONDS.sleep(100);
-      producer.send(newStringEvent("book", NOW.toEpochMilli() + 1));
-      TimeUnit.MILLISECONDS.sleep(100);
-      producer.send(newStringEvent("movie", NOW.toEpochMilli() + 3));
-      TimeUnit.MILLISECONDS.sleep(200);
-      producer.send(newStringEvent("movie", NOW.toEpochMilli() + 2));
-      TimeUnit.MILLISECONDS.sleep(200);
-      producer.send(newStringEvent("movie", NOW.toEpochMilli()));
+      producer.send(newStringEvent("book", null));
+      producer.send(newStringEvent("movie", null));
+      producer.send(newStringEvent("movie", null));
+
+//      producer.send(newStringEvent("book", NOW.toEpochMilli() + 1));
+//      TimeUnit.MILLISECONDS.sleep(100);
+//      producer.send(newStringEvent("movie", NOW.toEpochMilli() + 3));
+//      TimeUnit.MILLISECONDS.sleep(200);
+//      producer.send(newStringEvent("movie", NOW.toEpochMilli() + 2));
+//      TimeUnit.MILLISECONDS.sleep(200);
+//      producer.send(newStringEvent("movie", NOW.toEpochMilli()));
 
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
