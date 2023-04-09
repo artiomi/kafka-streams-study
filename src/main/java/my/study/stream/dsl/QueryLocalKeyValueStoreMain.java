@@ -7,14 +7,17 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import my.study.common.InteractiveQueriesRestService;
 import my.study.common.LoggingProcessorSupplier;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -23,6 +26,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -33,9 +37,12 @@ public class QueryLocalKeyValueStoreMain {
 
   public static final String CLICKS_COUNT_STORE = "ClicksCountStore";
   public static final String COUNTS_FILTER_STORE = "CountsFilter";
+  static final String DEFAULT_HOST = "localhost";
+  static final int DEFAULT_PORT = 8888;
 
   public static void main(String[] args) throws InterruptedException, ExecutionException {
     Properties config = getStreamProperties("query-local-store-app", "query-local-store-config");
+    config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, DEFAULT_HOST + ":" + DEFAULT_PORT);
     Topology topology = initTopology();
     KafkaStreams streams = new KafkaStreams(topology, config);
     log.info("Topology:{}", topology.describe());
@@ -44,8 +51,9 @@ public class QueryLocalKeyValueStoreMain {
       log.error("Try to handle exception.", exception);
       return StreamThreadExceptionResponse.REPLACE_THREAD;
     });
+    InteractiveQueriesRestService restService = startRestProxy(streams, DEFAULT_HOST, DEFAULT_PORT);
     streams.setStateListener((newState, oldState) -> {
-      if (newState.isRunningOrRebalancing()) {
+      if (newState == State.RUNNING) {
         log.info("State listener called for state:{}", newState);
         listDataFromStore(streams, CLICKS_COUNT_STORE);
         listDataFromStore(streams, COUNTS_FILTER_STORE);
@@ -56,7 +64,23 @@ public class QueryLocalKeyValueStoreMain {
     streams.cleanUp();
     streams.start();
 
-    Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      try {
+        streams.close();
+        restService.stop();
+      } catch (Exception e) {
+        //ignored
+      }
+    }));
+  }
+
+  static InteractiveQueriesRestService startRestProxy(final KafkaStreams streams,
+      final String host,
+      final int port) {
+    final HostInfo hostInfo = new HostInfo(host, port);
+    final InteractiveQueriesRestService restService = new InteractiveQueriesRestService(streams, hostInfo);
+    restService.start(port);
+    return restService;
   }
 
   private static void listDataFromStore(KafkaStreams streams, String storeName) {
