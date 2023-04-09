@@ -11,7 +11,7 @@ import my.study.common.LoggingProcessorSupplier;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -44,22 +44,39 @@ public class QueryLocalKeyValueStoreMain {
       log.error("Try to handle exception.", exception);
       return StreamThreadExceptionResponse.REPLACE_THREAD;
     });
+    streams.setStateListener((newState, oldState) -> {
+      if (newState.isRunningOrRebalancing()) {
+        log.info("State listener called for state:{}", newState);
+        listDataFromStore(streams, CLICKS_COUNT_STORE);
+        listDataFromStore(streams, COUNTS_FILTER_STORE);
+        listKeyMetadata(streams);
+      }
+    });
+
     streams.cleanUp();
     streams.start();
 
     Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+  }
 
-    while (streams.state() != State.RUNNING) {
-      log.info("Wait stream to be in:{} state. Current state is:{}", State.RUNNING, streams.state());
-      TimeUnit.SECONDS.sleep(5);
-    }
+  private static void listDataFromStore(KafkaStreams streams, String storeName) {
     ReadOnlyKeyValueStore<String, Long> countStore = streams.store(
-        StoreQueryParameters.fromNameAndType(CLICKS_COUNT_STORE, QueryableStoreTypes.keyValueStore()));
-    CompletableFuture.runAsync(() -> iterateStore(CLICKS_COUNT_STORE, countStore));
+        StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+    CompletableFuture.runAsync(() -> iterateStore(storeName, countStore));
+  }
 
-    ReadOnlyKeyValueStore<String, Long> filterStore = streams.store(
-        StoreQueryParameters.fromNameAndType(COUNTS_FILTER_STORE, QueryableStoreTypes.keyValueStore()));
-    CompletableFuture.runAsync(() -> iterateStore(COUNTS_FILTER_STORE, filterStore));
+  private static void listKeyMetadata(KafkaStreams streams) {
+    while (true) {
+      KeyQueryMetadata bookMetadata = streams.queryMetadataForKey(CLICKS_COUNT_STORE, "book",
+          Serdes.String().serializer());
+      log.info("Key metadata:{}", bookMetadata);
+      try {
+        TimeUnit.SECONDS.sleep(10);
+      } catch (InterruptedException e) {
+        log.error("Interrupted thread.", e);
+        return;
+      }
+    }
   }
 
   private static Topology initTopology() {
